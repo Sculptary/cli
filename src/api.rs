@@ -1,4 +1,4 @@
-//! Minimal client for the public ShapesDB API (`/api/v1`).
+//! Minimal client for the public Sculptary API (`/api/v1`).
 
 use anyhow::{anyhow, Result};
 use serde::de::DeserializeOwned;

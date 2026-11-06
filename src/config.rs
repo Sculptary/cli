@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_HOST: &str = "https://shapesdb.com";
+pub const DEFAULT_HOST: &str = "https://sculptary.com";
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Config {
@@ -20,10 +20,10 @@ pub struct HostConfig {
 }
 
 pub fn path() -> Result<PathBuf> {
-    if let Ok(p) = std::env::var("SHAPESDB_CONFIG") {
+    if let Ok(p) = std::env::var("SCULPTARY_CONFIG") {
         return Ok(PathBuf::from(p));
     }
-    Ok(dirs::config_dir().context("no config directory on this system")?.join("shapesdb").join("config.toml"))
+    Ok(dirs::config_dir().context("no config directory on this system")?.join("sculptary").join("config.toml"))
 }
 
 impl Config {

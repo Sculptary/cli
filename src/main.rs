@@ -1,5 +1,5 @@
-//! `shape`: the ShapesDB command line. Git does the version control; `shape`
-//! adds ShapesDB accounts, model validation, model-aware diffs and publishing.
+//! `shape`: the Sculptary command line. Git does the version control; `shape`
+//! adds Sculptary accounts, model validation, model-aware diffs and publishing.
 
 mod api;
 mod config;
@@ -17,8 +17,8 @@ use serde_json::json;
 #[derive(Parser)]
 #[command(name = "shape", version, about = "Version control and collaboration for 3D, on top of Git.")]
 struct Cli {
-    /// ShapesDB host (defaults to your configured host or https://shapesdb.com).
-    #[arg(long, global = true, env = "SHAPESDB_HOST")]
+    /// Sculptary host (defaults to your configured host or https://sculptary.com).
+    #[arg(long, global = true, env = "SCULPTARY_HOST")]
     host: Option<String>,
     #[command(subcommand)]
     command: Cmd,
@@ -28,8 +28,8 @@ struct Cli {
 enum Cmd {
     /// Sign in with a personal access token and configure Git to use it.
     Login {
-        /// Token (otherwise read from SHAPESDB_TOKEN or prompted).
-        #[arg(long, env = "SHAPESDB_TOKEN", hide_env_values = true)]
+        /// Token (otherwise read from SCULPTARY_TOKEN or prompted).
+        #[arg(long, env = "SCULPTARY_TOKEN", hide_env_values = true)]
         token: Option<String>,
         /// Do not configure the Git credential helper.
         #[arg(long)]
@@ -72,9 +72,9 @@ enum Cmd {
     },
     /// Validate model files (defaults to every model file in the repository).
     Validate { paths: Vec<PathBuf> },
-    /// Open the repository (or a file) on ShapesDB in your browser.
+    /// Open the repository (or a file) on Sculptary in your browser.
     Preview { path: Option<String> },
-    /// Create a ShapesDB repository for the current directory and push it.
+    /// Create a Sculptary repository for the current directory and push it.
     Publish {
         #[arg(long)]
         name: Option<String>,
@@ -85,7 +85,7 @@ enum Cmd {
         #[arg(long, default_value = "")]
         description: String,
     },
-    /// Create a release (and tag) on ShapesDB.
+    /// Create a release (and tag) on Sculptary.
     Release {
         tag: String,
         #[arg(long)]
@@ -222,7 +222,7 @@ fn init(dir: Option<PathBuf>) -> Result<ExitCode> {
     } else {
         eprintln!("warning: git-lfs is not installed; large model files will be stored in Git directly.");
     }
-    println!("Initialized a ShapesDB-ready repository in {}.", std::env::current_dir()?.display());
+    println!("Initialized a Sculptary-ready repository in {}.", std::env::current_dir()?.display());
     Ok(ExitCode::SUCCESS)
 }
 
@@ -376,7 +376,7 @@ fn tempfile_for(path: &str, data: Option<&[u8]>) -> Result<Option<TempModel>> {
 /// Parse `origin` into (host, owner/name).
 fn origin() -> Result<(String, String)> {
     let url = git::output(&["remote", "get-url", "origin"]).context("this repository has no `origin` remote")?;
-    parse_remote(&url).ok_or_else(|| anyhow!("origin ({url}) is not a ShapesDB URL"))
+    parse_remote(&url).ok_or_else(|| anyhow!("origin ({url}) is not a Sculptary URL"))
 }
 
 fn parse_remote(url: &str) -> Option<(String, String)> {
@@ -452,9 +452,9 @@ mod tests {
 
     #[test]
     fn remotes() {
-        assert_eq!(parse_remote("https://shapesdb.com/alice/castle.git"), Some(("https://shapesdb.com".into(), "alice/castle".into())));
+        assert_eq!(parse_remote("https://sculptary.com/alice/castle.git"), Some(("https://sculptary.com".into(), "alice/castle".into())));
         assert_eq!(parse_remote("http://localhost:8080/alice/castle.git"), Some(("http://localhost:8080".into(), "alice/castle".into())));
-        assert_eq!(parse_remote("git@git.shapesdb.com:alice/castle.git"), Some(("https://git.shapesdb.com".into(), "alice/castle".into())));
+        assert_eq!(parse_remote("git@git.sculptary.com:alice/castle.git"), Some(("https://git.sculptary.com".into(), "alice/castle".into())));
         assert_eq!(parse_remote("ssh://git@localhost:2222/alice/castle.git"), Some(("https://localhost".into(), "alice/castle".into())));
         assert_eq!(parse_remote("https://example.com/a/b/c"), None);
     }

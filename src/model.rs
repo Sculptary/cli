@@ -1,7 +1,7 @@
 //! Lightweight, dependency-free model inspection for validation and diffs.
 //!
 //! These parsers read headers and counts; they do not build full scenes. The
-//! ShapesDB server performs complete processing after a push.
+//! Sculptary server performs complete processing after a push.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};

@@ -1,12 +1,12 @@
 [package]
-name = "shapesdb-cli"
+name = "sculptary-cli"
 version = "0.1.0"
 edition = "2021"
-description = "Command line for ShapesDB: version control and collaboration for 3D"
+description = "Command line for Sculptary: version control and collaboration for 3D"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/ShapesDB/cli"
+repository = "https://github.com/Sculptary/cli"
 readme = "README.md"
-keywords = ["3d", "git", "lfs", "gltf", "shapesdb"]
+keywords = ["3d", "git", "lfs", "gltf", "sculptary"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
