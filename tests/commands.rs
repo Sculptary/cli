@@ -50,7 +50,12 @@ impl Server {
                 let deadline = Instant::now() + Duration::from_secs(10);
                 let mut stream = loop {
                     match listener.accept() {
-                        Ok((stream, _)) => break stream,
+                        // Accepted sockets inherit non-blocking mode from the listener on
+                        // Windows; reads below must block.
+                        Ok((stream, _)) => {
+                            stream.set_nonblocking(false).unwrap();
+                            break stream;
+                        }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                             assert!(
                                 Instant::now() < deadline,
