@@ -24,7 +24,9 @@ pub struct ModelInfo {
     pub warnings: Vec<String>,
 }
 
-pub const EXTENSIONS: &[&str] = &["glb", "gltf", "obj", "stl", "ply", "fbx", "blend", "3mf", "step", "stp", "usd", "usdz"];
+pub const EXTENSIONS: &[&str] = &[
+    "glb", "gltf", "obj", "stl", "ply", "fbx", "blend", "3mf", "step", "stp", "usd", "usdz",
+];
 
 pub fn format_of(path: &Path) -> Option<String> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
@@ -40,7 +42,12 @@ pub fn inspect(path: &Path) -> Result<ModelInfo> {
         "stl" => stl(path)?,
         "obj" => obj(path)?,
         "ply" => ply(path)?,
-        other => ModelInfo { warnings: vec![format!("{other} files are stored and versioned; local inspection is not available")], ..Default::default() },
+        other => ModelInfo {
+            warnings: vec![format!(
+                "{other} files are stored and versioned; local inspection is not available"
+            )],
+            ..Default::default()
+        },
     };
     info.format = fmt;
     info.size = size;
@@ -60,7 +67,12 @@ fn extend(b: &mut Option<[[f32; 3]; 2]>, p: [f32; 3]) {
 }
 
 fn gltf_counts(json: &serde_json::Value, info: &mut ModelInfo) {
-    let arr = |k: &str| json.get(k).and_then(|v| v.as_array()).map(|a| a.len() as u64).unwrap_or(0);
+    let arr = |k: &str| {
+        json.get(k)
+            .and_then(|v| v.as_array())
+            .map(|a| a.len() as u64)
+            .unwrap_or(0)
+    };
     info.meshes = arr("meshes");
     info.materials = arr("materials");
     info.textures = arr("textures");
@@ -68,10 +80,26 @@ fn gltf_counts(json: &serde_json::Value, info: &mut ModelInfo) {
     let accessors = json.get("accessors").and_then(|v| v.as_array());
     let mut tris = 0u64;
     let mut verts = 0u64;
-    for mesh in json.get("meshes").and_then(|v| v.as_array()).into_iter().flatten() {
-        for prim in mesh.get("primitives").and_then(|v| v.as_array()).into_iter().flatten() {
-            let count = |idx: Option<u64>| idx.and_then(|i| accessors?.get(i as usize)?.get("count")?.as_u64()).unwrap_or(0);
-            let pos = prim.get("attributes").and_then(|a| a.get("POSITION")).and_then(|v| v.as_u64());
+    for mesh in json
+        .get("meshes")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+    {
+        for prim in mesh
+            .get("primitives")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
+            let count = |idx: Option<u64>| {
+                idx.and_then(|i| accessors?.get(i as usize)?.get("count")?.as_u64())
+                    .unwrap_or(0)
+            };
+            let pos = prim
+                .get("attributes")
+                .and_then(|a| a.get("POSITION"))
+                .and_then(|v| v.as_u64());
             let v = count(pos);
             verts += v;
             let mode = prim.get("mode").and_then(|m| m.as_u64()).unwrap_or(4);
@@ -80,7 +108,14 @@ fn gltf_counts(json: &serde_json::Value, info: &mut ModelInfo) {
                 tris += if idx.is_some() { count(idx) / 3 } else { v / 3 };
             }
             if let Some(acc) = pos.and_then(|i| accessors?.get(i as usize)) {
-                let read = |k: &str| acc.get(k).and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect::<Vec<_>>());
+                let read = |k: &str| {
+                    acc.get(k).and_then(|v| v.as_array()).map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_f64())
+                            .map(|x| x as f32)
+                            .collect::<Vec<_>>()
+                    })
+                };
                 if let (Some(mn), Some(mx)) = (read("min"), read("max")) {
                     if mn.len() == 3 && mx.len() == 3 {
                         extend(&mut info.bounds, [mn[0], mn[1], mn[2]]);
@@ -93,10 +128,16 @@ fn gltf_counts(json: &serde_json::Value, info: &mut ModelInfo) {
     info.triangles = tris;
     info.vertices = verts;
     for kind in ["buffers", "images"] {
-        for item in json.get(kind).and_then(|v| v.as_array()).into_iter().flatten() {
+        for item in json
+            .get(kind)
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
             if let Some(uri) = item.get("uri").and_then(|u| u.as_str()) {
                 if !uri.starts_with("data:") {
-                    info.warnings.push(format!("references external file '{uri}'"));
+                    info.warnings
+                        .push(format!("references external file '{uri}'"));
                 }
             }
         }
@@ -106,7 +147,8 @@ fn gltf_counts(json: &serde_json::Value, info: &mut ModelInfo) {
 fn glb(path: &Path) -> Result<ModelInfo> {
     let mut f = File::open(path)?;
     let mut header = [0u8; 20];
-    f.read_exact(&mut header).context("file too short for GLB")?;
+    f.read_exact(&mut header)
+        .context("file too short for GLB")?;
     if &header[0..4] != b"glTF" {
         bail!("missing glTF magic");
     }
@@ -128,15 +170,23 @@ fn glb(path: &Path) -> Result<ModelInfo> {
     let mut info = ModelInfo::default();
     let actual = std::fs::metadata(path)?.len();
     if declared != actual {
-        info.warnings.push(format!("header declares {declared} bytes but file has {actual}"));
+        info.warnings.push(format!(
+            "header declares {declared} bytes but file has {actual}"
+        ));
     }
     gltf_counts(&json, &mut info);
     Ok(info)
 }
 
 fn gltf(path: &Path) -> Result<ModelInfo> {
-    let json: serde_json::Value = serde_json::from_reader(BufReader::new(File::open(path)?)).context("invalid glTF JSON")?;
-    if json.get("asset").and_then(|a| a.get("version")).and_then(|v| v.as_str()) != Some("2.0") {
+    let json: serde_json::Value =
+        serde_json::from_reader(BufReader::new(File::open(path)?)).context("invalid glTF JSON")?;
+    if json
+        .get("asset")
+        .and_then(|a| a.get("version"))
+        .and_then(|v| v.as_str())
+        != Some("2.0")
+    {
         bail!("not a glTF 2.0 asset");
     }
     let mut info = ModelInfo::default();
@@ -149,7 +199,10 @@ fn stl(path: &Path) -> Result<ModelInfo> {
     let mut f = File::open(path)?;
     let mut head = [0u8; 84];
     let n = f.read(&mut head)?;
-    let mut info = ModelInfo { meshes: 1, ..Default::default() };
+    let mut info = ModelInfo {
+        meshes: 1,
+        ..Default::default()
+    };
     if n == 84 {
         let tris = u32::from_le_bytes(head[80..84].try_into().unwrap()) as u64;
         if 84 + tris * 50 == size {
@@ -160,7 +213,9 @@ fn stl(path: &Path) -> Result<ModelInfo> {
                 f.read_exact(&mut rec)?;
                 for v in 0..3 {
                     let o = 12 + v * 12;
-                    let p = [0, 1, 2].map(|k| f32::from_le_bytes(rec[o + k * 4..o + k * 4 + 4].try_into().unwrap()));
+                    let p = [0, 1, 2].map(|k| {
+                        f32::from_le_bytes(rec[o + k * 4..o + k * 4 + 4].try_into().unwrap())
+                    });
                     extend(&mut info.bounds, p);
                 }
             }
@@ -180,7 +235,10 @@ fn stl(path: &Path) -> Result<ModelInfo> {
             first = false;
         }
         if let Some(rest) = t.strip_prefix("vertex") {
-            let p: Vec<f32> = rest.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+            let p: Vec<f32> = rest
+                .split_whitespace()
+                .filter_map(|x| x.parse().ok())
+                .collect();
             if p.len() == 3 {
                 extend(&mut info.bounds, [p[0], p[1], p[2]]);
                 info.vertices += 1;
@@ -223,7 +281,9 @@ fn obj(path: &Path) -> Result<ModelInfo> {
             Some("mtllib") => {
                 for lib in it {
                     if !path.with_file_name(lib).exists() {
-                        info.warnings.push(format!("material library '{lib}' not found next to the model"));
+                        info.warnings.push(format!(
+                            "material library '{lib}' not found next to the model"
+                        ));
                     }
                 }
             }
@@ -237,7 +297,10 @@ fn obj(path: &Path) -> Result<ModelInfo> {
 
 fn ply(path: &Path) -> Result<ModelInfo> {
     let reader = BufReader::new(File::open(path)?);
-    let mut info = ModelInfo { meshes: 1, ..Default::default() };
+    let mut info = ModelInfo {
+        meshes: 1,
+        ..Default::default()
+    };
     let mut lines = reader.lines();
     if lines.next().transpose()?.as_deref() != Some("ply") {
         bail!("missing PLY magic");
@@ -264,7 +327,11 @@ mod tests {
     fn obj_counts_and_bounds() {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("t.obj");
-        std::fs::write(&p, "o tetra\nv 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 2\nf 1 2 3\nf 1 2 4\nf 1 3 4\nf 2 3 4 1\n").unwrap();
+        std::fs::write(
+            &p,
+            "o tetra\nv 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 2\nf 1 2 3\nf 1 2 4\nf 1 3 4\nf 2 3 4 1\n",
+        )
+        .unwrap();
         let i = inspect(&p).unwrap();
         assert_eq!((i.vertices, i.triangles, i.meshes), (4, 5, 1));
         assert_eq!(i.bounds.unwrap()[1], [1.0, 1.0, 2.0]);

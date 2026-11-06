@@ -23,7 +23,10 @@ pub fn path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("SCULPTARY_CONFIG") {
         return Ok(PathBuf::from(p));
     }
-    Ok(dirs::config_dir().context("no config directory on this system")?.join("sculptary").join("config.toml"))
+    Ok(dirs::config_dir()
+        .context("no config directory on this system")?
+        .join("sculptary")
+        .join("config.toml"))
 }
 
 impl Config {
@@ -32,7 +35,8 @@ impl Config {
         if !p.exists() {
             return Ok(Self::default());
         }
-        toml::from_str(&std::fs::read_to_string(&p)?).with_context(|| format!("invalid config at {}", p.display()))
+        toml::from_str(&std::fs::read_to_string(&p)?)
+            .with_context(|| format!("invalid config at {}", p.display()))
     }
 
     pub fn save(&self) -> Result<()> {
@@ -44,7 +48,12 @@ impl Config {
         {
             use std::io::Write;
             use std::os::unix::fs::OpenOptionsExt;
-            let mut f = std::fs::OpenOptions::new().create(true).write(true).truncate(true).mode(0o600).open(&p)?;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&p)?;
             f.write_all(text.as_bytes())?;
         }
         #[cfg(not(unix))]
@@ -53,7 +62,11 @@ impl Config {
     }
 
     pub fn host(&self, explicit: Option<&str>) -> String {
-        normalize(explicit.or(self.default_host.as_deref()).unwrap_or(DEFAULT_HOST))
+        normalize(
+            explicit
+                .or(self.default_host.as_deref())
+                .unwrap_or(DEFAULT_HOST),
+        )
     }
 
     pub fn credentials(&self, host: &str) -> Option<&HostConfig> {
@@ -63,5 +76,9 @@ impl Config {
 
 pub fn normalize(host: &str) -> String {
     let h = host.trim().trim_end_matches('/');
-    if h.starts_with("http://") || h.starts_with("https://") { h.to_string() } else { format!("https://{h}") }
+    if h.starts_with("http://") || h.starts_with("https://") {
+        h.to_string()
+    } else {
+        format!("https://{h}")
+    }
 }
