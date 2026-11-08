@@ -12,6 +12,7 @@ shape validate                   # check every model file in the repository
 shape diff                       # git diff --stat plus triangle/vertex/mesh deltas
 shape publish --private          # create the Sculptary repository and push
 shape release v1.0.0 --notes "First release"
+shape release upload v1.0.0 tooling.zip
 shape clone owner/repository
 shape preview models/castle.glb  # open the file on Sculptary
 shape collection list northwind # user or organization
@@ -68,6 +69,23 @@ units). Processing results report their current state; run the command again whi
 or running. Failed/non-comparable results show their error or reason. Heatmap data is included only
 in JSON; with `--deviation`, the complete geometry response is under `deviation`, including the colour
 scale and authenticated heatmap GLB URL. Human output never prints heatmap arrays.
+
+## Release files
+
+Version 0.4 adds `shape release upload <tag> <file>`. The release must already
+exist. The repository defaults to the current Git origin; use `--repo owner/name`
+to upload from another directory. `--host` selects the server and `--json` prints
+the verified file metadata.
+
+The command checks the release's upload limit, calculates SHA-256 with a fixed
+buffer, streams the file directly to storage and confirms server verification.
+Storage requests carry only the signed upload headers, without your API token,
+and reject redirects. Failed transfers remove their pending upload when possible;
+abandoned uploads expire automatically. If the verification response is lost,
+check the release before retrying, since the file may already be published.
+
+Existing `shape release <tag> --notes <text>` creation commands still work. To
+create a release whose tag is literally `upload`, use `shape release -- upload`.
 
 ## Install
 

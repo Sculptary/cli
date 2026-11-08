@@ -183,7 +183,7 @@ fn comment_id(value: &str) -> Result<String, String> {
     Ok(value.into())
 }
 
-fn full_name(value: &str) -> Result<String, String> {
+pub(crate) fn full_name(value: &str) -> Result<String, String> {
     let parts: Vec<_> = value.split('/').collect();
     if parts.len() != 2
         || parts

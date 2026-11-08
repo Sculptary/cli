@@ -6,6 +6,7 @@ mod commands;
 mod config;
 mod git;
 mod model;
+mod release;
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -93,9 +94,17 @@ enum Cmd {
         #[arg(long, default_value = "")]
         description: String,
     },
-    /// Create a release (and tag) on Sculptary.
+    /// Create a release or upload a release file.
+    #[command(
+        subcommand_precedence_over_arg = true,
+        subcommand_negates_reqs = true,
+        args_conflicts_with_subcommands = true
+    )]
     Release {
-        tag: String,
+        #[arg(required = true)]
+        tag: Option<String>,
+        #[command(subcommand)]
+        command: Option<release::ReleaseCmd>,
         #[arg(long)]
         title: Option<String>,
         #[arg(long, default_value = "")]
@@ -193,11 +202,43 @@ fn run(cli: Cli) -> Result<ExitCode> {
         } => publish(&cfg, &host, name, owner, private, &description),
         Cmd::Release {
             tag,
+            command,
             title,
             notes,
             target,
             prerelease,
-        } => release(&cfg, &host, &tag, title, &notes, target, prerelease),
+        } => match command {
+            Some(release::ReleaseCmd::Upload {
+                tag,
+                file,
+                repo,
+                json,
+            }) => {
+                let (host, repo) = match repo {
+                    Some(repo) => (host, repo),
+                    None => {
+                        let (remote_host, repo) = origin()?;
+                        let selected = if cli.host.is_some() || cfg.credentials(&host).is_some() {
+                            host
+                        } else {
+                            remote_host
+                        };
+                        (selected, repo)
+                    }
+                };
+                release::upload(&client(&cfg, &host)?, &repo, &tag, &file, json)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            None => release(
+                &cfg,
+                &host,
+                tag.as_deref().context("a release tag is required")?,
+                title,
+                &notes,
+                target,
+                prerelease,
+            ),
+        },
         Cmd::Collection { command, json } => {
             commands::collection(&remote_client(&cfg, &host), command)?.print(json)?;
             Ok(ExitCode::SUCCESS)
@@ -682,6 +723,29 @@ fn release(
 #[cfg(test)]
 mod tests {
     use super::parse_remote;
+    use clap::Parser;
+
+    #[test]
+    fn release_creation_keeps_its_existing_arguments() {
+        let parsed = super::Cli::try_parse_from([
+            "shape",
+            "release",
+            "v1",
+            "--notes",
+            "First release",
+            "--prerelease",
+        ])
+        .unwrap();
+        assert!(
+            matches!(parsed.command, super::Cmd::Release { tag: Some(tag), command: None, notes, prerelease: true, .. } if tag == "v1" && notes == "First release")
+        );
+        assert!(super::Cli::try_parse_from(["shape", "release"]).is_err());
+        assert!(super::Cli::try_parse_from(["shape", "release", "upload", "v1"]).is_err());
+        let escaped = super::Cli::try_parse_from(["shape", "release", "--", "upload"]).unwrap();
+        assert!(
+            matches!(escaped.command, super::Cmd::Release { tag: Some(tag), command: None, .. } if tag == "upload")
+        );
+    }
 
     #[test]
     fn remotes() {
