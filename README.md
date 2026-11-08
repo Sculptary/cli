@@ -19,6 +19,9 @@ shape collection create "Castle kits" --owner northwind --slug castle-kits
 shape collection add northwind/castle-kits northwind/medieval-castle --note "Use the tower"
 shape pr comments northwind/medieval-castle 7
 shape pr comment northwind/medieval-castle 7 --path models/castle.glb --at 1,2,3 --normal 0,1,0 --body "Round this edge"
+shape pr reply northwind/medieval-castle 7 <comment-id> --body "Fixed"
+shape pr resolve northwind/medieval-castle <comment-id>
+shape pr unresolve northwind/medieval-castle <comment-id>
 shape compare northwind/medieval-castle v1.0.0..main --path models/castle.glb --deviation
 ```
 
@@ -47,11 +50,17 @@ for pretty-printed API data (successful deletions print `null`). Human output us
 | `shape collection reorder owner/slug [owner/repo ...]` | Every visible repository exactly once, in the desired order. |
 | `shape pr comments <repo> <number>` | List comments with asset path, position, normal and camera when present. |
 | `shape pr comment <repo> <number>` | Required: `--path <asset> --at x,y,z --body <text>`. Optional: `--normal x,y,z`. |
+| `shape pr reply <repo> <number> <comment-id>` | Required: `--body <text>`. Creates a real reply to the root comment. |
+| `shape pr resolve <repo> <comment-id>` | Resolve as the comment author, PR author or a repository writer. |
+| `shape pr unresolve <repo> <comment-id>` | Reopen a resolved thread with the same permissions. |
 | `shape compare <repo> <base>..<head>` | Required: `--path <asset>`. `--deviation` includes surface measurements. |
 
 Use an empty string with `--description` or `--note` to clear it. Collection and comment lists are
 unpaginated. Spatial coordinates must be three finite numbers in model coordinates; no normal is
 assumed unless supplied. For example, `--at=-1,2,3` supports a negative coordinate.
+
+Version 0.3 adds replies and resolution. Comment lists group one level of replies under each root and
+include resolution details. JSON output retains `parent_id`, `replies`, `resolved_at` and `resolved_by`.
 
 Comparison output includes count deltas, bounding box changes and added/removed materials. Surface
 deviation includes method, confidence, resolution and largest change (Hausdorff distance, in model

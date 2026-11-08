@@ -176,6 +176,121 @@ fn comment() -> Value {
 }
 
 #[test]
+fn reply_resolve_and_reopen_threads() {
+    let server = Server::new(
+        vec![
+            request(
+                "POST",
+                "/api/v1/repos/alice/castle/pulls/7/comments",
+                Some(json!({"body":"Raised", "parent_id":"comment-1"})),
+                json!({"id":"reply-1", "body":"Raised", "parent_id":"comment-1", "author":{"username":"alice"}}),
+            ),
+            request(
+                "POST",
+                "/api/v1/repos/alice/castle/comments/comment-1/resolve",
+                Some(json!({})),
+                json!({"id":"comment-1", "body":"Fix", "resolved_at":"2026-11-08", "resolved_by":{"username":"alice"}}),
+            ),
+            request(
+                "POST",
+                "/api/v1/repos/alice/castle/comments/comment-1/unresolve",
+                Some(json!({})),
+                json!({"id":"comment-1", "body":"Fix", "resolved_at":null}),
+            ),
+        ],
+        true,
+    );
+    assert!(stdout(server.run(&[
+        "pr",
+        "reply",
+        "alice/castle",
+        "7",
+        "comment-1",
+        "--body",
+        "Raised"
+    ]))
+    .contains("Raised"));
+    assert!(
+        stdout(server.run(&["pr", "resolve", "alice/castle", "comment-1"])).contains("Resolved")
+    );
+    assert!(stdout(server.run(&["pr", "unresolve", "alice/castle", "comment-1"])).contains("Fix"));
+    server.finish();
+}
+
+#[test]
+fn threaded_payloads_and_permission_errors() {
+    let c = json!({"id":"comment-1", "body":"Raise the roof", "author":{"username":"alice"},
+                   "resolved_at":"2026-11-08", "resolved_by":{"username":"alice"},
+                   "replies":[{"id":"reply-1", "parent_id":"comment-1", "body":"Raised", "author":{"username":"bob"}}]});
+    let mut expected = vec![
+        request(
+            "GET",
+            "/api/v1/repos/alice/castle/pulls/7",
+            None,
+            json!({"comments":[c]}),
+        ),
+        request(
+            "GET",
+            "/api/v1/repos/alice/castle/pulls/7",
+            None,
+            json!({"comments":[c]}),
+        ),
+    ];
+    for (target, body) in [
+        (
+            "/api/v1/repos/alice/castle/comments/comment-1/resolve",
+            json!({}),
+        ),
+        (
+            "/api/v1/repos/alice/castle/comments/comment-1/unresolve",
+            json!({}),
+        ),
+        (
+            "/api/v1/repos/alice/castle/pulls/7/comments",
+            json!({"body":"Raised", "parent_id":"comment-1"}),
+        ),
+    ] {
+        expected.push(Expected {
+            method: "POST",
+            target: target.into(),
+            body: Some(body),
+            status: 403,
+            response: json!({"error":{"code":"forbidden", "message":"Thread access denied."}}),
+        });
+    }
+    let server = Server::new(expected, true);
+    let out = stdout(server.run(&["pr", "comments", "alice/castle", "7"]));
+    assert!(out.contains("Resolved by alice") && out.contains("Reply:") && out.contains("Raised"));
+    let data: Value = serde_json::from_str(&stdout(server.run(&[
+        "pr",
+        "comments",
+        "alice/castle",
+        "7",
+        "--json",
+    ])))
+    .unwrap();
+    assert_eq!(data[0]["replies"][0]["parent_id"], "comment-1");
+    for args in [
+        vec!["pr", "resolve", "alice/castle", "comment-1"],
+        vec!["pr", "unresolve", "alice/castle", "comment-1"],
+        vec![
+            "pr",
+            "reply",
+            "alice/castle",
+            "7",
+            "comment-1",
+            "--body",
+            "Raised",
+        ],
+    ] {
+        let result = server.run(&args);
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("Thread access denied."));
+    }
+    server.finish();
+}
+
+#[test]
 fn collection_crud_items_and_order_json() {
     let c = collection();
     let mut delete = request(
@@ -588,6 +703,9 @@ fn invalid_arguments_fail_before_http() {
         vec!["collection", "edit", "a/b"],
         vec!["collection", "list", "alice", "--repo", "a/b"],
         vec!["pr", "comments", "a/b", "0"],
+        vec!["pr", "reply", "a/b", "1", "root", "--body", " "],
+        vec!["pr", "resolve", "a/b", "../root"],
+        vec!["pr", "unresolve", "a/b", "root?query"],
         vec![
             "pr", "comment", "a/b", "1", "--path", "m.glb", "--at", "1,2", "--body", "Hi",
         ],

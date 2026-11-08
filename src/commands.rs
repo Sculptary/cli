@@ -103,6 +103,31 @@ pub enum PrCmd {
         #[arg(value_parser = clap::value_parser!(u64).range(1..))]
         number: u64,
     },
+    /// Reply to a root comment in a pull request.
+    Reply {
+        #[arg(value_parser = full_name)]
+        repo: String,
+        #[arg(value_parser = clap::value_parser!(u64).range(1..))]
+        number: u64,
+        #[arg(value_parser = comment_id)]
+        comment_id: String,
+        #[arg(long)]
+        body: String,
+    },
+    /// Resolve a comment thread.
+    Resolve {
+        #[arg(value_parser = full_name)]
+        repo: String,
+        #[arg(value_parser = comment_id)]
+        comment_id: String,
+    },
+    /// Reopen a resolved comment thread.
+    Unresolve {
+        #[arg(value_parser = full_name)]
+        repo: String,
+        #[arg(value_parser = comment_id)]
+        comment_id: String,
+    },
     /// Pin a comment to a 3D model point.
     Comment {
         #[arg(value_parser = full_name)]
@@ -149,6 +174,13 @@ impl Output {
         }
         Ok(())
     }
+}
+
+fn comment_id(value: &str) -> Result<String, String> {
+    if value.is_empty() || !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("expected a comment ID".into());
+    }
+    Ok(value.into())
 }
 
 fn full_name(value: &str) -> Result<String, String> {
@@ -299,6 +331,28 @@ pub fn pr(api: &Client, cmd: PrCmd) -> Result<Output> {
             };
             return Ok(Output { data, human });
         }
+        PrCmd::Reply {
+            repo,
+            number,
+            comment_id,
+            body,
+        } => {
+            if body.trim().is_empty() {
+                bail!("body must not be empty");
+            }
+            api.post(
+                &format!("/repos/{repo}/pulls/{number}/comments"),
+                &json!({"body": body, "parent_id": comment_id}),
+            )?
+        }
+        PrCmd::Resolve { repo, comment_id } => api.post(
+            &format!("/repos/{repo}/comments/{comment_id}/resolve"),
+            &json!({}),
+        )?,
+        PrCmd::Unresolve { repo, comment_id } => api.post(
+            &format!("/repos/{repo}/comments/{comment_id}/unresolve"),
+            &json!({}),
+        )?,
         PrCmd::Comment {
             repo,
             number,
@@ -413,6 +467,22 @@ fn comment_text(data: &Value) -> String {
             if let Some(value) = anchor.get(key).filter(|v| !v.is_null()) {
                 rows.push(format!("{label}: {value}."));
             }
+        }
+    }
+    if let Some(at) = data["resolved_at"].as_str() {
+        rows.push(format!(
+            "Resolved by {} at {at}.",
+            data["resolved_by"]["username"]
+                .as_str()
+                .unwrap_or("deleted user")
+        ));
+    }
+    if let Some(replies) = data["replies"].as_array() {
+        for reply in replies {
+            rows.push(format!(
+                "Reply:\n  {}",
+                comment_text(reply).replace('\n', "\n  ")
+            ));
         }
     }
     rows.join("\n")
