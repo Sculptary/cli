@@ -46,7 +46,7 @@ struct Transfer {
 fn transfer(prepared: &Prepared, file: File, size: u64) -> Result<()> {
     // A separate client has no API bearer token, cookie store or redirects.
     let http = reqwest::blocking::Client::builder()
-        .user_agent(concat!("shape-cli/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("sculpt-cli/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(30 * 60))

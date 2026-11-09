@@ -26,7 +26,7 @@ pub struct Me {
 impl Client {
     pub fn new(host: &str, token: Option<String>) -> Self {
         let http = reqwest::blocking::Client::builder()
-            .user_agent(concat!("shape-cli/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("sculpt-cli/", env!("CARGO_PKG_VERSION")))
             .timeout(std::time::Duration::from_secs(60))
             .build()
             .expect("http client");

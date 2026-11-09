@@ -79,9 +79,10 @@ impl Server {
                     format!("{} {} HTTP/1.1", expected.method, expected.target)
                 );
                 let headers = headers.to_ascii_lowercase();
-                assert!(
-                    headers.contains(concat!("user-agent: shape-cli/", env!("CARGO_PKG_VERSION")))
-                );
+                assert!(headers.contains(concat!(
+                    "user-agent: sculpt-cli/",
+                    env!("CARGO_PKG_VERSION")
+                )));
                 if authenticated {
                     assert!(headers.contains("authorization: bearer test-token"));
                 } else {
@@ -112,7 +113,7 @@ impl Server {
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_shape"))
+        Command::new(env!("CARGO_BIN_EXE_sculpt"))
             .args(["--host", &self.host])
             .args(args)
             .env("SCULPTARY_CONFIG", self.config.path().join("config.toml"))
@@ -723,5 +724,65 @@ fn invalid_arguments_fail_before_http() {
     ] {
         assert!(!server.run(&args).status.success(), "accepted {args:?}");
     }
+    server.finish();
+}
+
+#[test]
+fn command_help_and_authentication_errors_use_sculpt() {
+    let server = Server::new(vec![], false);
+    let help = server.run(&["--help"]);
+    assert!(help.status.success());
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(text.contains("Usage: sculpt"));
+    let version = server.run(&["--version"]);
+    assert!(version.status.success());
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("sculpt "));
+    let whoami = server.run(&["whoami"]);
+    assert!(!whoami.status.success());
+    assert!(String::from_utf8_lossy(&whoami.stderr).contains("run `sculpt login`"));
+    server.finish();
+}
+
+#[test]
+fn login_replaces_the_previous_git_helper_with_sculpt() {
+    let server = Server::new(
+        vec![request(
+            "GET",
+            "/api/v1/user",
+            None,
+            json!({"username":"alice"}),
+        )],
+        true,
+    );
+    let global = server.config.path().join("gitconfig");
+    let key = format!("credential.{}.helper", server.host);
+    assert!(Command::new("git")
+        .args(["config", "--file"])
+        .arg(&global)
+        .args([&key, "!shape git-credential"])
+        .status()
+        .unwrap()
+        .success());
+    let output = Command::new(env!("CARGO_BIN_EXE_sculpt"))
+        .args(["--host", &server.host, "login", "--token", "test-token"])
+        .env("SCULPTARY_CONFIG", server.config.path().join("config.toml"))
+        .env("GIT_CONFIG_GLOBAL", &global)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env_remove("SCULPTARY_HOST")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let helper = Command::new("git")
+        .args(["config", "--file"])
+        .arg(&global)
+        .args(["--get-all", &key])
+        .output()
+        .unwrap();
+    assert!(helper.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&helper.stdout).trim(),
+        "!sculpt git-credential"
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Configured Git to use sculpt"));
     server.finish();
 }

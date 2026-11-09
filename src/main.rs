@@ -1,4 +1,4 @@
-//! `shape`: the Sculptary command line. Git does the version control; `shape`
+//! `sculpt`: the Sculptary command line. Git does the version control; `sculpt`
 //! adds Sculptary accounts, model validation, model-aware diffs and publishing.
 
 mod api;
@@ -18,7 +18,7 @@ use serde_json::json;
 
 #[derive(Parser)]
 #[command(
-    name = "shape",
+    name = "sculpt",
     version,
     about = "Version control and collaboration for 3D, on top of Git."
 )]
@@ -258,7 +258,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
 fn client(cfg: &config::Config, host: &str) -> Result<api::Client> {
     let creds = cfg
         .credentials(host)
-        .ok_or_else(|| anyhow!("not signed in to {host}; run `shape login`"))?;
+        .ok_or_else(|| anyhow!("not signed in to {host}; run `sculpt login`"))?;
     Ok(api::Client::new(host, Some(creds.token.clone())))
 }
 
@@ -304,9 +304,9 @@ fn login(
             "--global",
             "--replace-all",
             &key,
-            "!shape git-credential",
+            "!sculpt git-credential",
         ])?;
-        println!("Configured Git to use shape for {host}.");
+        println!("Configured Git to use sculpt for {host}.");
     }
     println!("Signed in to {host} as {}.", me.username);
     Ok(ExitCode::SUCCESS)
@@ -315,7 +315,7 @@ fn login(
 /// Implements Git's credential helper protocol for configured hosts.
 fn git_credential(cfg: &config::Config, action: &str) -> Result<ExitCode> {
     if action != "get" {
-        return Ok(ExitCode::SUCCESS); // store/erase: credentials are managed by `shape login`
+        return Ok(ExitCode::SUCCESS); // store/erase: credentials are managed by `sculpt login`
     }
     let mut protocol = String::new();
     let mut hostname = String::new();
@@ -593,7 +593,7 @@ impl Drop for TempModel {
 fn tempfile_for(path: &str, data: Option<&[u8]>) -> Result<Option<TempModel>> {
     let Some(data) = data else { return Ok(None) };
     let dir =
-        std::env::temp_dir().join(format!("shape-diff-{}-{}", std::process::id(), path.len()));
+        std::env::temp_dir().join(format!("sculpt-diff-{}-{}", std::process::id(), path.len()));
     std::fs::create_dir_all(&dir)?;
     let file = dir.join(Path::new(path).file_name().unwrap_or_default());
     std::fs::File::create(&file)?.write_all(data)?;
@@ -658,10 +658,10 @@ fn publish(
     description: &str,
 ) -> Result<ExitCode> {
     if !git::in_repo() {
-        bail!("run `shape init` first");
+        bail!("run `sculpt init` first");
     }
     if git::output(&["remote", "get-url", "origin"]).is_ok() {
-        bail!("this repository already has an `origin` remote; use `shape push`");
+        bail!("this repository already has an `origin` remote; use `sculpt push`");
     }
     let name = match name {
         Some(n) => n,
@@ -728,7 +728,7 @@ mod tests {
     #[test]
     fn release_creation_keeps_its_existing_arguments() {
         let parsed = super::Cli::try_parse_from([
-            "shape",
+            "sculpt",
             "release",
             "v1",
             "--notes",
@@ -739,9 +739,9 @@ mod tests {
         assert!(
             matches!(parsed.command, super::Cmd::Release { tag: Some(tag), command: None, notes, prerelease: true, .. } if tag == "v1" && notes == "First release")
         );
-        assert!(super::Cli::try_parse_from(["shape", "release"]).is_err());
-        assert!(super::Cli::try_parse_from(["shape", "release", "upload", "v1"]).is_err());
-        let escaped = super::Cli::try_parse_from(["shape", "release", "--", "upload"]).unwrap();
+        assert!(super::Cli::try_parse_from(["sculpt", "release"]).is_err());
+        assert!(super::Cli::try_parse_from(["sculpt", "release", "upload", "v1"]).is_err());
+        let escaped = super::Cli::try_parse_from(["sculpt", "release", "--", "upload"]).unwrap();
         assert!(
             matches!(escaped.command, super::Cmd::Release { tag: Some(tag), command: None, .. } if tag == "upload")
         );

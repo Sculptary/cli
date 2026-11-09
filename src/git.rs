@@ -1,4 +1,4 @@
-//! `shape` delegates all version control to the standard `git` executable.
+//! `sculpt` delegates all version control to the standard `git` executable.
 
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};

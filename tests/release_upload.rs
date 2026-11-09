@@ -91,7 +91,7 @@ impl Server {
             ),
         )
         .unwrap();
-        Command::new(env!("CARGO_BIN_EXE_shape"))
+        Command::new(env!("CARGO_BIN_EXE_sculpt"))
             .args(["--host", &self.host, "release", "upload", "v1/kit"])
             .arg(file)
             .args(["--repo", "alice/castle", "--json"])
