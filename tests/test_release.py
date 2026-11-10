@@ -95,6 +95,13 @@ class ReleaseTests(unittest.TestCase):
         (self.output / "SHA256SUMS").write_text("0" * 64 + "  ../outside\n")
         with self.assertRaises(ValueError): release.verify(self.output)
 
+    def test_verification_requires_known_release_assets_not_only_a_file_count(self):
+        self.generate()
+        (self.output / "install.sh").rename(self.output / "unrelated.sh")
+        manifest = self.output / "SHA256SUMS"
+        manifest.write_text(manifest.read_text().replace("  install.sh\n", "  unrelated.sh\n"))
+        with self.assertRaises(ValueError): release.verify(self.output)
+
     def test_tags_are_validated_before_use_in_paths_or_templates(self):
         for bad in ["1.2.3", "v01.2.3", "v1.2", "v1.2.3/evil", "v1.2.3'", "v1.2.3\n", "v1.2.3-01", "v1.2.3+", "../../evil"]:
             with self.subTest(tag=bad):
@@ -102,6 +109,11 @@ class ReleaseTests(unittest.TestCase):
         for good in ["v0.5.0", "v1.2.3-rc.1", "v1.2.3+build.2"]:
             self.assertEqual(release.version(good), good[1:])
         with self.assertRaises(ValueError): release.validate_tag("v1.2.3", "1.2.4")
+
+    def test_build_metadata_does_not_mark_a_stable_version_as_prerelease(self):
+        self.assertFalse(release.is_prerelease("v1.2.3+build-alpha"))
+        self.assertTrue(release.is_prerelease("v1.2.3-rc.1+build-alpha"))
+        self.assertFalse(release.is_prerelease("v1.2.3"))
 
 
 if __name__ == "__main__":

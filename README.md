@@ -96,6 +96,52 @@ cargo install --git https://github.com/Sculptary/cli
 Prebuilt binaries for macOS, Linux and Windows are attached to each
 [release](https://github.com/Sculptary/cli/releases).
 
+The release workflow also produces `sculpt.rb` for Homebrew, `sculpt.json` for
+Scoop, `install.sh`, `install.ps1` and `SHA256SUMS`. These accompany the four
+archives for Linux x86_64, macOS Apple silicon, macOS Intel and Windows x86_64.
+Use a release that includes these files. There is no published Homebrew tap or
+Scoop bucket; download the manifest or installer from that release's assets.
+
+On Linux or macOS, run the downloaded installer:
+
+```sh
+sh install.sh
+# Or choose a directory:
+SCULPT_INSTALL_DIR="$HOME/bin" sh install.sh
+```
+
+The default directory is `$HOME/.local/bin`. The script checks the archive's
+embedded SHA-256 before extracting and replacing `sculpt`. It stages the new
+binary beside the destination and cleans up temporary files after failures.
+It requires `curl`, `tar`, `mktemp` and `sha256sum` or `shasum`.
+
+On Windows, run the downloaded PowerShell installer:
+
+```powershell
+.\install.ps1
+# Or choose a directory:
+.\install.ps1 -InstallDir "$HOME\bin"
+```
+
+The default directory is `%LOCALAPPDATA%\Sculptary\bin`. The installer requires
+Windows x86_64, PowerShell 5.1 or later and the Windows `tar` command. It verifies
+SHA-256 before replacing `sculpt.exe`. Add the chosen directory to your PATH;
+neither installer changes PATH or requests administrator privileges.
+
+To use the downloaded Scoop manifest, run `scoop install .\sculpt.json`.
+To use the downloaded Homebrew formula in a local tap:
+
+```sh
+brew tap-new local/sculpt
+cp sculpt.rb "$(brew --repository local/sculpt)/Formula/sculpt.rb"
+brew install local/sculpt/sculpt
+```
+
+Both manifests pin archive checksums. `SHA256SUMS` covers archives and installer
+files; `sha256sum -c SHA256SUMS` verifies a complete downloaded bundle. See
+[release packaging](docs/releasing.md) for checks and a workflow preview that
+creates build artifacts without publishing a release.
+
 Version 0.5 renames the executable from `shape` to `sculpt`. Existing saved
 credentials and `SCULPTARY_*` settings carry over. Run `sculpt login` once after
 upgrading to update Git's credential helper, then use `sculpt` in scripts and

@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,6 +22,7 @@ jobs:
         run: |
           tag=$(python scripts/release.py tag)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$(python scripts/release.py prerelease --tag "$tag")" >> "$GITHUB_OUTPUT"
   build:
     needs: validate
     strategy:
@@ -82,4 +84,4 @@ jobs:
         with:
           files: release/*
           fail_on_unmatched_files: true
-          prerelease: ${{ contains(needs.validate.outputs.tag, '-') }}
+          prerelease: ${{ needs.validate.outputs.prerelease }}

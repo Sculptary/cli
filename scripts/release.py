@@ -36,6 +36,10 @@ def validate_tag(tag, package_version):
     return tag
 
 
+def is_prerelease(tag):
+    return "-" in version(tag).split("+", 1)[0]
+
+
 def asset_name(tag, target):
     version(tag)
     if target not in TARGETS:
@@ -156,7 +160,20 @@ def verify(directory):
         if path.is_symlink() or not path.is_file() or digest(path) != match[1]:
             raise ValueError("Release file does not match its checksum.")
         seen.add(match[2])
-    if seen != {p.name for p in directory.iterdir()} - {"SHA256SUMS"} or len(seen) != len(TARGETS) + len(METADATA) - 1:
+    tags = set()
+    for target in TARGETS:
+        suffix = f"-{target}.tar.gz"
+        matches = [name for name in seen if name.startswith("sculpt-") and name.endswith(suffix)]
+        if len(matches) != 1:
+            raise ValueError("Release checksum manifest is missing a target.")
+        tag = matches[0][len("sculpt-"):-len(suffix)]
+        version(tag)
+        tags.add(tag)
+    if len(tags) != 1:
+        raise ValueError("Release checksum manifest mixes release versions.")
+    shared_tag = tags.pop()
+    expected = {asset_name(shared_tag, target) for target in TARGETS} | (METADATA - {"SHA256SUMS"})
+    if seen != {p.name for p in directory.iterdir()} - {"SHA256SUMS"} or seen != expected:
         raise ValueError("Release checksum manifest is incomplete.")
 
 
@@ -164,6 +181,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("tag")
+    prerelease = commands.add_parser("prerelease")
+    prerelease.add_argument("--tag", required=True)
     pack = commands.add_parser("archive")
     pack.add_argument("--tag", required=True)
     pack.add_argument("--target", choices=TARGETS, required=True)
@@ -186,7 +205,9 @@ def main():
             verify(args.directory)
         else:
             validate_tag(args.tag, package_version)
-            if args.command == "archive":
+            if args.command == "prerelease":
+                print("true" if is_prerelease(args.tag) else "false")
+            elif args.command == "archive":
                 print(archive(args.tag, args.target, args.binary, args.output))
             else:
                 generate(args.tag, args.artifacts, args.output)
