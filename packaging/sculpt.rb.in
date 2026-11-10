@@ -1,0 +1,31 @@
+class Sculpt < Formula
+  desc "Version control and collaboration for 3D, on top of Git"
+  homepage "https://github.com/Sculptary/cli"
+  version "@VERSION@"
+  license any_of: ["MIT", "Apache-2.0"]
+
+  on_macos do
+    on_arm do
+      url "@BASE_URL@/sculpt-@TAG@-aarch64-apple-darwin.tar.gz"
+      sha256 "@AARCH64_APPLE_DARWIN@"
+    end
+    on_intel do
+      url "@BASE_URL@/sculpt-@TAG@-x86_64-apple-darwin.tar.gz"
+      sha256 "@X86_64_APPLE_DARWIN@"
+    end
+  end
+
+  on_linux do
+    depends_on arch: :x86_64
+    url "@BASE_URL@/sculpt-@TAG@-x86_64-unknown-linux-gnu.tar.gz"
+    sha256 "@X86_64_UNKNOWN_LINUX_GNU@"
+  end
+
+  def install
+    bin.install "sculpt"
+  end
+
+  test do
+    assert_match "sculpt #{version}", shell_output("#{bin}/sculpt --version")
+  end
+end

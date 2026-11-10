@@ -1,0 +1,42 @@
+# Sculpt @VERSION@. The checksum is pinned to this release's Windows archive.
+[CmdletBinding()]
+param([string]$InstallDir = $env:SCULPT_INSTALL_DIR)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+if ($env:OS -ne 'Windows_NT') { throw 'This installer supports Windows x86_64.' }
+$architecture = $env:PROCESSOR_ARCHITEW6432
+if ([string]::IsNullOrEmpty($architecture)) { $architecture = $env:PROCESSOR_ARCHITECTURE }
+if ($architecture -ne 'AMD64') { throw 'This installer supports Windows x86_64.' }
+if ([string]::IsNullOrEmpty($InstallDir)) { $InstallDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Sculptary\bin' }
+if (-not (Get-Command tar -ErrorAction SilentlyContinue)) { throw 'The Windows tar command is required.' }
+$tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+$tempDir = Join-Path $tempRoot ('sculpt-install-' + [Guid]::NewGuid().ToString('N'))
+$stage = $null
+New-Item -ItemType Directory -Path $tempDir | Out-Null
+try {
+    $archive = Join-Path $tempDir 'sculpt.tar.gz'
+    Invoke-WebRequest -UseBasicParsing -Uri '@BASE_URL@/sculpt-@TAG@-x86_64-pc-windows-msvc.tar.gz' -OutFile $archive -TimeoutSec 120
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '@X86_64_PC_WINDOWS_MSVC@') { throw 'Archive checksum did not match. The installed command was not changed.' }
+    & tar -xzf $archive -C $tempDir sculpt.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Could not extract the release archive.' }
+    $binary = Get-Item -LiteralPath (Join-Path $tempDir 'sculpt.exe')
+    if ($binary.PSIsContainer -or ($binary.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'The archive does not contain a regular sculpt.exe binary.' }
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    $InstallDir = (Resolve-Path -LiteralPath $InstallDir).ProviderPath
+    $destination = Join-Path $InstallDir 'sculpt.exe'
+    if (Test-Path -LiteralPath $destination) {
+        $existing = Get-Item -LiteralPath $destination
+        if ($existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'The install destination must be a regular file.' }
+    }
+    $stage = Join-Path $InstallDir ('.sculpt-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    Copy-Item -LiteralPath $binary.FullName -Destination $stage
+    Move-Item -LiteralPath $stage -Destination $destination -Force
+    $stage = $null
+    Write-Output "Installed sculpt @VERSION@ in $InstallDir"
+    Write-Output "Add this directory to your PATH if needed: $InstallDir"
+} finally {
+    if ($stage -and (Test-Path -LiteralPath $stage)) { Remove-Item -LiteralPath $stage -Force }
+    $resolved = [IO.Path]::GetFullPath($tempDir)
+    if (-not $resolved.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected temporary directory.' }
+    Remove-Item -LiteralPath $resolved -Recurse -Force
+}

@@ -1,0 +1,48 @@
+#!/bin/sh
+# Sculpt @VERSION@. Checksums are pinned to this release's archives.
+set -eu
+
+fail() { printf '%s\n' "$*" >&2; exit 1; }
+if [ "$#" -gt 0 ]; then
+  [ "$#" -eq 1 ] && [ "$1" = '--help' ] || fail 'Usage: sh install.sh'
+  printf '%s\n' 'Install sculpt @VERSION@. Set SCULPT_INSTALL_DIR to choose a directory (default: $HOME/.local/bin).'
+  exit 0
+fi
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64|Linux-amd64) target='x86_64-unknown-linux-gnu'; expected='@X86_64_UNKNOWN_LINUX_GNU@' ;;
+  Darwin-arm64|Darwin-aarch64) target='aarch64-apple-darwin'; expected='@AARCH64_APPLE_DARWIN@' ;;
+  Darwin-x86_64) target='x86_64-apple-darwin'; expected='@X86_64_APPLE_DARWIN@' ;;
+  *) fail 'This installer supports Linux x86_64 and macOS Intel or Apple silicon.' ;;
+esac
+for tool in curl tar mktemp; do command -v "$tool" >/dev/null 2>&1 || fail "Required command not found: $tool"; done
+if command -v sha256sum >/dev/null 2>&1; then hash_tool=sha256sum
+elif command -v shasum >/dev/null 2>&1; then hash_tool=shasum
+else fail 'Install sha256sum or shasum before running this installer.'
+fi
+install_dir=${SCULPT_INSTALL_DIR:-"${HOME:?HOME or SCULPT_INSTALL_DIR is required}/.local/bin"}
+temp_root=$(cd "${TMPDIR:-/tmp}" && pwd -P)
+temp_dir=$(mktemp -d "$temp_root/sculpt-install.XXXXXXXX")
+stage=''
+cleanup() {
+  if [ -n "$stage" ]; then rm -f -- "$stage"; fi
+  case "$temp_dir" in "$temp_root"/sculpt-install.*) rm -rf -- "$temp_dir" ;; esac
+}
+trap cleanup 0
+trap 'exit 1' HUP INT TERM
+archive="$temp_dir/sculpt.tar.gz"
+curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 --output "$archive" "@BASE_URL@/sculpt-@TAG@-$target.tar.gz"
+if [ "$hash_tool" = sha256sum ]; then actual=$(sha256sum "$archive"); else actual=$(shasum -a 256 "$archive"); fi
+actual=${actual%% *}
+[ "$actual" = "$expected" ] || fail 'Archive checksum did not match. The installed command was not changed.'
+tar -xzf "$archive" -C "$temp_dir" sculpt
+[ -f "$temp_dir/sculpt" ] && [ ! -L "$temp_dir/sculpt" ] || fail 'The archive does not contain a regular sculpt binary.'
+mkdir -p "$install_dir"
+install_dir=$(cd "$install_dir" && pwd -P)
+[ ! -d "$install_dir/sculpt" ] || fail 'The install destination is a directory.'
+stage=$(mktemp "$install_dir/.sculpt.XXXXXXXX")
+cp "$temp_dir/sculpt" "$stage"
+chmod 755 "$stage"
+mv -f "$stage" "$install_dir/sculpt"
+stage=''
+printf 'Installed sculpt @VERSION@ in %s\n' "$install_dir"
+printf 'Add this directory to your PATH if needed: %s\n' "$install_dir"
