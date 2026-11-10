@@ -29,7 +29,6 @@ def main():
     environment = {
         **os.environ,
         "HOMEBREW_NO_AUTO_UPDATE": "1",
-        "HOMEBREW_NO_INSTALL_FROM_API": "1",
         "HOMEBREW_NO_ANALYTICS": "1",
         "HOMEBREW_NO_ENV_HINTS": "1",
     }
@@ -38,7 +37,7 @@ def main():
     if (
         tap_name
         in subprocess.check_output(
-            ["brew", "tap"], text=True, env=environment
+            ["brew", "tap"], text=True, env=environment, timeout=60
         ).splitlines()
     ):
         raise RuntimeError("The temporary packaging tap already exists.")
@@ -74,9 +73,11 @@ def main():
         (tap / "Formula/sculpt.rb").write_text(text)
         tapped = False
         try:
-            subprocess.run(["git", "init", "-q", str(tap)], check=True)
+            subprocess.run(["git", "init", "-q", str(tap)], check=True, timeout=30)
             subprocess.run(
-                ["git", "-C", str(tap), "add", "Formula/sculpt.rb"], check=True
+                ["git", "-C", str(tap), "add", "Formula/sculpt.rb"],
+                check=True,
+                timeout=30,
             )
             subprocess.run(
                 [
@@ -92,15 +93,24 @@ def main():
                     "Add local fixture formula",
                 ],
                 check=True,
+                timeout=30,
             )
             subprocess.run(
-                ["brew", "tap", tap_name, tap.as_uri()], env=environment, check=True
+                ["brew", "tap", tap_name, tap.as_uri()],
+                env=environment,
+                check=True,
+                timeout=60,
             )
             tapped = True
             subprocess.run(
-                ["brew", "install", "--formula", formula], env=environment, check=True
+                ["brew", "install", "--formula", formula],
+                env=environment,
+                check=True,
+                timeout=180,
             )
-            subprocess.run(["brew", "test", formula], env=environment, check=True)
+            subprocess.run(
+                ["brew", "test", formula], env=environment, check=True, timeout=60
+            )
             print("Generated Homebrew formula installed and tested the native CLI.")
         finally:
             if tapped:
@@ -108,9 +118,13 @@ def main():
                     ["brew", "uninstall", "--force", formula],
                     env=environment,
                     check=False,
+                    timeout=60,
                 )
                 subprocess.run(
-                    ["brew", "untap", tap_name], env=environment, check=False
+                    ["brew", "untap", tap_name],
+                    env=environment,
+                    check=False,
+                    timeout=60,
                 )
             server.shutdown()
             server.server_close()
