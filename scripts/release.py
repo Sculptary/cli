@@ -1,15 +1,16 @@
 """Build release archives and checksum-pinned installer assets, without publishing."""
+
 import argparse
 import gzip
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import tarfile
 import tempfile
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = {
@@ -24,8 +25,15 @@ DOWNLOADS = "https://github.com/Sculptary/cli/releases/download"
 
 
 def version(tag):
-    match = re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?", tag, flags=re.ASCII)
-    if not match or any(part.isdigit() and len(part) > 1 and part[0] == "0" for part in (match[4] or "").split(".")):
+    match = re.fullmatch(
+        r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?",
+        tag,
+        flags=re.ASCII,
+    )
+    if not match or any(
+        part.isdigit() and len(part) > 1 and part[0] == "0"
+        for part in (match[4] or "").split(".")
+    ):
         raise ValueError("Release tag must be v followed by a valid semantic version.")
     return tag[1:]
 
@@ -64,14 +72,21 @@ def archive(tag, target, binary, output):
     with tempfile.NamedTemporaryFile(dir=output, delete=False) as temporary:
         temporary_path = Path(temporary.name)
         try:
-            with gzip.GzipFile(fileobj=temporary, mode="wb", filename="", mtime=0) as compressed:
-                with tarfile.open(fileobj=compressed, mode="w|") as packed:
-                    for entry_name, source in [(TARGETS[target], binary), *[(licence, ROOT / licence) for licence in sorted(LICENCES)]]:
-                        info = tarfile.TarInfo(entry_name)
-                        info.size = source.stat().st_size
-                        info.mode = 0o755 if entry_name == TARGETS[target] else 0o644
-                        with source.open("rb") as content:
-                            packed.addfile(info, content)
+            with (
+                gzip.GzipFile(
+                    fileobj=temporary, mode="wb", filename="", mtime=0
+                ) as compressed,
+                tarfile.open(fileobj=compressed, mode="w|") as packed,
+            ):
+                for entry_name, source in [
+                    (TARGETS[target], binary),
+                    *[(licence, ROOT / licence) for licence in sorted(LICENCES)],
+                ]:
+                    info = tarfile.TarInfo(entry_name)
+                    info.size = source.stat().st_size
+                    info.mode = 0o755 if entry_name == TARGETS[target] else 0o644
+                    with source.open("rb") as content:
+                        packed.addfile(info, content)
             temporary.flush()
         except BaseException:
             temporary.close()
@@ -88,8 +103,15 @@ def check_archive(path, binary):
         with tarfile.open(path, "r:gz") as packed:
             names = set()
             for info in packed:
-                if not info.isfile() or info.name in names or info.name not in {binary, *LICENCES} or info.size == 0:
-                    raise ValueError("Archive must contain only its binary and both licence texts as regular files.")
+                if (
+                    not info.isfile()
+                    or info.name in names
+                    or info.name not in {binary, *LICENCES}
+                    or info.size == 0
+                ):
+                    raise ValueError(
+                        "Archive must contain only its binary and both licence texts as regular files."
+                    )
                 names.add(info.name)
                 # Read each member fully so truncated payloads cannot produce installer metadata.
                 with packed.extractfile(info) as content:
@@ -114,7 +136,10 @@ def generate(tag, artifacts, output):
     number = version(tag)
     artifacts, output = Path(artifacts), Path(output)
     names = {asset_name(tag, target) for target in TARGETS}
-    if not artifacts.is_dir() or {p.name for p in artifacts.iterdir()} - names - METADATA:
+    if (
+        not artifacts.is_dir()
+        or {p.name for p in artifacts.iterdir()} - names - METADATA
+    ):
         raise ValueError("Artifact directory contains an unexpected release or file.")
     values = {"VERSION": number, "TAG": tag, "BASE_URL": f"{DOWNLOADS}/{tag}"}
     hashes = {}
@@ -123,18 +148,36 @@ def generate(tag, artifacts, output):
         check_archive(artifacts / name, binary)
         hashes[name] = digest(artifacts / name)
         values[target.upper().replace("-", "_")] = hashes[name]
-    files = {name: render(name, values) for name in ["sculpt.rb", "install.sh", "install.ps1"]}
+    files = {
+        name: render(name, values)
+        for name in ["sculpt.rb", "install.sh", "install.ps1"]
+    }
     windows = "x86_64-pc-windows-msvc"
-    files["sculpt.json"] = (json.dumps({
-        "version": number,
-        "description": "Version control and collaboration for 3D, on top of Git",
-        "homepage": "https://github.com/Sculptary/cli",
-        "license": "MIT|Apache-2.0",
-        "architecture": {"64bit": {"url": f"{DOWNLOADS}/{tag}/{asset_name(tag, windows)}", "hash": hashes[asset_name(tag, windows)]}},
-        "bin": "sculpt.exe",
-    }, indent=2) + "\n").encode()
-    hashes.update({name: hashlib.sha256(content).hexdigest() for name, content in files.items()})
-    files["SHA256SUMS"] = "".join(f"{value}  {name}\n" for name, value in sorted(hashes.items())).encode()
+    files["sculpt.json"] = (
+        json.dumps(
+            {
+                "version": number,
+                "description": "Version control and collaboration for 3D, on top of Git",
+                "homepage": "https://github.com/Sculptary/cli",
+                "license": "MIT|Apache-2.0",
+                "architecture": {
+                    "64bit": {
+                        "url": f"{DOWNLOADS}/{tag}/{asset_name(tag, windows)}",
+                        "hash": hashes[asset_name(tag, windows)],
+                    }
+                },
+                "bin": "sculpt.exe",
+            },
+            indent=2,
+        )
+        + "\n"
+    ).encode()
+    hashes.update(
+        {name: hashlib.sha256(content).hexdigest() for name, content in files.items()}
+    )
+    files["SHA256SUMS"] = "".join(
+        f"{value}  {name}\n" for name, value in sorted(hashes.items())
+    ).encode()
     if output.exists() and {p.name for p in output.iterdir()} - names - METADATA:
         raise ValueError("Output directory contains unrelated files.")
     output.mkdir(parents=True, exist_ok=True)
@@ -163,17 +206,26 @@ def verify(directory):
     tags = set()
     for target in TARGETS:
         suffix = f"-{target}.tar.gz"
-        matches = [name for name in seen if name.startswith("sculpt-") and name.endswith(suffix)]
+        matches = [
+            name
+            for name in seen
+            if name.startswith("sculpt-") and name.endswith(suffix)
+        ]
         if len(matches) != 1:
             raise ValueError("Release checksum manifest is missing a target.")
-        tag = matches[0][len("sculpt-"):-len(suffix)]
+        tag = matches[0][len("sculpt-") : -len(suffix)]
         version(tag)
         tags.add(tag)
     if len(tags) != 1:
         raise ValueError("Release checksum manifest mixes release versions.")
     shared_tag = tags.pop()
-    expected = {asset_name(shared_tag, target) for target in TARGETS} | (METADATA - {"SHA256SUMS"})
-    if seen != {p.name for p in directory.iterdir()} - {"SHA256SUMS"} or seen != expected:
+    expected = {asset_name(shared_tag, target) for target in TARGETS} | (
+        METADATA - {"SHA256SUMS"}
+    )
+    if (
+        seen != {p.name for p in directory.iterdir()} - {"SHA256SUMS"}
+        or seen != expected
+    ):
         raise ValueError("Release checksum manifest is incomplete.")
 
 
@@ -195,11 +247,17 @@ def main():
     verification = commands.add_parser("verify")
     verification.add_argument("directory", type=Path)
     args = parser.parse_args()
-    package_version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
+    package_version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"][
+        "version"
+    ]
     try:
         if args.command == "tag":
             ref = os.environ.get("GITHUB_REF", "")
-            tag = ref.removeprefix("refs/tags/") if ref.startswith("refs/tags/") else f"v{package_version}"
+            tag = (
+                ref.removeprefix("refs/tags/")
+                if ref.startswith("refs/tags/")
+                else f"v{package_version}"
+            )
             print(validate_tag(tag, package_version))
         elif args.command == "verify":
             verify(args.directory)

@@ -1,11 +1,11 @@
 """Execute generated installers with local archive fixtures and real extraction."""
+
 import os
-from pathlib import Path
 import platform
-import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
 import test_release
 
@@ -49,20 +49,50 @@ class PosixInstallerTests(InstallerFixture):
             path.write_text(text)
             path.chmod(0o755)
 
-    def run_installer(self, system="Linux", machine="x86_64", target="x86_64-unknown-linux-gnu", **overrides):
-        env = {**os.environ, "PATH": str(self.tools) + os.pathsep + os.environ["PATH"], "SCULPT_INSTALL_DIR": str(self.destination),
-               "TEST_ARCHIVE": str(self.artifacts / release.asset_name(self.tag, target)), "TEST_DOWNLOAD_LOG": str(self.root / "download.log"),
-               "TEST_SYSTEM": system, "TEST_MACHINE": machine, "TMPDIR": str(self.scratch), **overrides}
-        return subprocess.run(["sh", str(self.output / "install.sh")], env=env, text=True, capture_output=True, timeout=30)
+    def run_installer(
+        self,
+        system="Linux",
+        machine="x86_64",
+        target="x86_64-unknown-linux-gnu",
+        **overrides,
+    ):
+        env = {
+            **os.environ,
+            "PATH": str(self.tools) + os.pathsep + os.environ["PATH"],
+            "SCULPT_INSTALL_DIR": str(self.destination),
+            "TEST_ARCHIVE": str(self.artifacts / release.asset_name(self.tag, target)),
+            "TEST_DOWNLOAD_LOG": str(self.root / "download.log"),
+            "TEST_SYSTEM": system,
+            "TEST_MACHINE": machine,
+            "TMPDIR": str(self.scratch),
+            **overrides,
+        }
+        return subprocess.run(
+            ["sh", str(self.output / "install.sh")],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
 
     def test_installs_all_supported_unix_targets_and_replaces_an_existing_binary(self):
-        for system, machine, target in [("Linux", "x86_64", "x86_64-unknown-linux-gnu"), ("Darwin", "arm64", "aarch64-apple-darwin"), ("Darwin", "x86_64", "x86_64-apple-darwin")]:
+        for system, machine, target in [
+            ("Linux", "x86_64", "x86_64-unknown-linux-gnu"),
+            ("Darwin", "arm64", "aarch64-apple-darwin"),
+            ("Darwin", "x86_64", "x86_64-apple-darwin"),
+        ]:
             with self.subTest(target=target):
                 self.destination.mkdir(exist_ok=True)
                 (self.destination / "sculpt").write_text("old binary")
                 result = self.run_installer(system, machine, target)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(subprocess.check_output([str(self.destination / "sculpt")], text=True), "sculpt fixture\n")
+                self.assertEqual(
+                    subprocess.check_output(
+                        [str(self.destination / "sculpt")], text=True
+                    ),
+                    "sculpt fixture\n",
+                )
                 download = (self.root / "download.log").read_text()
                 self.assertIn("--proto =https --proto-redir =https", download)
                 self.assertIn(release.asset_name(self.tag, target), download)
@@ -72,7 +102,9 @@ class PosixInstallerTests(InstallerFixture):
         self.destination.mkdir()
         existing = self.destination / "sculpt"
         existing.write_text("old binary")
-        archive = self.artifacts / release.asset_name(self.tag, "x86_64-unknown-linux-gnu")
+        archive = self.artifacts / release.asset_name(
+            self.tag, "x86_64-unknown-linux-gnu"
+        )
         archive.write_bytes(b"tampered")
         result = self.run_installer()
         self.assertNotEqual(result.returncode, 0)
@@ -91,16 +123,29 @@ class PosixInstallerTests(InstallerFixture):
         self.assertFalse(self.destination.exists())
         self.assert_clean()
 
-    @unittest.skipUnless(os.environ.get("SCULPT_TEST_BINARY"), "Set SCULPT_TEST_BINARY for compiled CLI smoke coverage")
+    @unittest.skipUnless(
+        os.environ.get("SCULPT_TEST_BINARY"),
+        "Set SCULPT_TEST_BINARY for compiled CLI smoke coverage",
+    )
     def test_installs_and_runs_the_compiled_cli(self):
         system = platform.system()
         machine = platform.machine()
-        target = "aarch64-apple-darwin" if system == "Darwin" and machine in {"arm64", "aarch64"} else "x86_64-apple-darwin" if system == "Darwin" else "x86_64-unknown-linux-gnu"
-        release.archive(self.tag, target, Path(os.environ["SCULPT_TEST_BINARY"]), self.artifacts)
+        target = (
+            "aarch64-apple-darwin"
+            if system == "Darwin" and machine in {"arm64", "aarch64"}
+            else "x86_64-apple-darwin"
+            if system == "Darwin"
+            else "x86_64-unknown-linux-gnu"
+        )
+        release.archive(
+            self.tag, target, Path(os.environ["SCULPT_TEST_BINARY"]), self.artifacts
+        )
         release.generate(self.tag, self.artifacts, self.output)
         result = self.run_installer(system, machine, target)
         self.assertEqual(result.returncode, 0, result.stderr)
-        output = subprocess.check_output([str(self.destination / "sculpt"), "--version"], text=True)
+        output = subprocess.check_output(
+            [str(self.destination / "sculpt"), "--version"], text=True
+        )
         self.assertRegex(output, r"^sculpt \d+\.\d+\.\d+")
         self.assert_clean()
 
@@ -111,24 +156,45 @@ class WindowsInstallerTests(InstallerFixture):
         quoted = lambda path: str(path).replace("'", "''")
         wrapper = self.root / "test.ps1"
         source = self.artifacts / release.asset_name(self.tag, "x86_64-pc-windows-msvc")
-        wrapper.write_text(f"""
+        wrapper.write_text(
+            f"""
 $ErrorActionPreference = 'Stop'
 function Invoke-WebRequest {{
     param([switch]$UseBasicParsing,[string]$Uri,[string]$OutFile,[int]$TimeoutSec)
     if ($Uri -ne '{release.DOWNLOADS}/{self.tag}/{source.name}') {{ throw 'Unexpected download URL' }}
     {'throw "Fixture download failure"' if fail else f"Copy-Item -LiteralPath '{quoted(source)}' -Destination $OutFile"}
 }}
-try {{ & '{quoted(self.output / 'install.ps1')}' -InstallDir '{quoted(self.destination)}'; exit 0 }}
+try {{ & '{quoted(self.output / "install.ps1")}' -InstallDir '{quoted(self.destination)}'; exit 0 }}
 catch {{ Write-Output $_.Exception.Message; exit 1 }}
-""", encoding="utf-8")
+""",
+            encoding="utf-8",
+        )
         env = {**os.environ, "TEMP": str(self.scratch), "TMP": str(self.scratch)}
         if shadow_tar:
             tools = self.root / "tools"
             tools.mkdir()
-            (tools / "tar.cmd").write_text("@echo off\necho Wrong tar selected >&2\nexit /b 125\n")
+            (tools / "tar.cmd").write_text(
+                "@echo off\necho Wrong tar selected >&2\nexit /b 125\n"
+            )
             env["PATH"] = str(tools) + os.pathsep + env["PATH"]
-        if unsupported: env.update(PROCESSOR_ARCHITECTURE="ARM64", PROCESSOR_ARCHITEW6432="")
-        return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)], env=env, text=True, capture_output=True, timeout=30)
+        if unsupported:
+            env.update(PROCESSOR_ARCHITECTURE="ARM64", PROCESSOR_ARCHITEW6432="")
+        return subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(wrapper),
+            ],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
 
     def test_installs_archive_into_a_path_with_spaces_and_literal_brackets(self):
         result = self.run_installer()
@@ -146,7 +212,9 @@ catch {{ Write-Output $_.Exception.Message; exit 1 }}
         self.destination.mkdir()
         existing = self.destination / "sculpt.exe"
         existing.write_bytes(b"old binary")
-        (self.artifacts / release.asset_name(self.tag, "x86_64-pc-windows-msvc")).write_bytes(b"tampered")
+        (
+            self.artifacts / release.asset_name(self.tag, "x86_64-pc-windows-msvc")
+        ).write_bytes(b"tampered")
         result = self.run_installer()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("checksum", result.stdout)
@@ -163,13 +231,23 @@ catch {{ Write-Output $_.Exception.Message; exit 1 }}
         self.assertFalse(self.destination.exists())
         self.assert_clean()
 
-    @unittest.skipUnless(os.environ.get("SCULPT_TEST_BINARY"), "Set SCULPT_TEST_BINARY for compiled CLI smoke coverage")
+    @unittest.skipUnless(
+        os.environ.get("SCULPT_TEST_BINARY"),
+        "Set SCULPT_TEST_BINARY for compiled CLI smoke coverage",
+    )
     def test_installs_and_runs_the_compiled_cli(self):
-        release.archive(self.tag, "x86_64-pc-windows-msvc", Path(os.environ["SCULPT_TEST_BINARY"]), self.artifacts)
+        release.archive(
+            self.tag,
+            "x86_64-pc-windows-msvc",
+            Path(os.environ["SCULPT_TEST_BINARY"]),
+            self.artifacts,
+        )
         release.generate(self.tag, self.artifacts, self.output)
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        output = subprocess.check_output([str(self.destination / "sculpt.exe"), "--version"], text=True)
+        output = subprocess.check_output(
+            [str(self.destination / "sculpt.exe"), "--version"], text=True
+        )
         self.assertRegex(output, r"^sculpt \d+\.\d+\.\d+")
         self.assert_clean()
 
