@@ -107,7 +107,7 @@ class PosixInstallerTests(InstallerFixture):
 
 @unittest.skipUnless(os.name == "nt", "PowerShell installer runs on Windows")
 class WindowsInstallerTests(InstallerFixture):
-    def run_installer(self, fail=False, unsupported=False):
+    def run_installer(self, fail=False, unsupported=False, shadow_tar=False):
         quoted = lambda path: str(path).replace("'", "''")
         wrapper = self.root / "test.ps1"
         source = self.artifacts / release.asset_name(self.tag, "x86_64-pc-windows-msvc")
@@ -122,11 +122,22 @@ try {{ & '{quoted(self.output / 'install.ps1')}' -InstallDir '{quoted(self.desti
 catch {{ Write-Output $_.Exception.Message; exit 1 }}
 """, encoding="utf-8")
         env = {**os.environ, "TEMP": str(self.scratch), "TMP": str(self.scratch)}
+        if shadow_tar:
+            tools = self.root / "tools"
+            tools.mkdir()
+            (tools / "tar.cmd").write_text("@echo off\necho Wrong tar selected >&2\nexit /b 125\n")
+            env["PATH"] = str(tools) + os.pathsep + env["PATH"]
         if unsupported: env.update(PROCESSOR_ARCHITECTURE="ARM64", PROCESSOR_ARCHITEW6432="")
         return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)], env=env, text=True, capture_output=True, timeout=30)
 
     def test_installs_archive_into_a_path_with_spaces_and_literal_brackets(self):
         result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.destination / "sculpt.exe").is_file())
+        self.assert_clean()
+
+    def test_uses_native_windows_tar_when_another_tar_is_first_on_path(self):
+        result = self.run_installer(shadow_tar=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue((self.destination / "sculpt.exe").is_file())
         self.assert_clean()

@@ -8,7 +8,10 @@ $architecture = $env:PROCESSOR_ARCHITEW6432
 if ([string]::IsNullOrEmpty($architecture)) { $architecture = $env:PROCESSOR_ARCHITECTURE }
 if ($architecture -ne 'AMD64') { throw 'This installer supports Windows x86_64.' }
 if ([string]::IsNullOrEmpty($InstallDir)) { $InstallDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Sculptary\bin' }
-if (-not (Get-Command tar -ErrorAction SilentlyContinue)) { throw 'The Windows tar command is required.' }
+$systemDirectory = 'System32'
+if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) { $systemDirectory = 'Sysnative' }
+$nativeTar = Join-Path $env:SystemRoot ($systemDirectory + '\tar.exe')
+if (-not (Test-Path -LiteralPath $nativeTar -PathType Leaf)) { throw 'The Windows tar command is required.' }
 $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
 $tempDir = Join-Path $tempRoot ('sculpt-install-' + [Guid]::NewGuid().ToString('N'))
 $stage = $null
@@ -17,7 +20,7 @@ try {
     $archive = Join-Path $tempDir 'sculpt.tar.gz'
     Invoke-WebRequest -UseBasicParsing -Uri '@BASE_URL@/sculpt-@TAG@-x86_64-pc-windows-msvc.tar.gz' -OutFile $archive -TimeoutSec 120
     if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '@X86_64_PC_WINDOWS_MSVC@') { throw 'Archive checksum did not match. The installed command was not changed.' }
-    & tar -xzf $archive -C $tempDir sculpt.exe
+    & $nativeTar -xzf $archive -C $tempDir sculpt.exe
     if ($LASTEXITCODE -ne 0) { throw 'Could not extract the release archive.' }
     $binary = Get-Item -LiteralPath (Join-Path $tempDir 'sculpt.exe')
     if ($binary.PSIsContainer -or ($binary.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'The archive does not contain a regular sculpt.exe binary.' }
