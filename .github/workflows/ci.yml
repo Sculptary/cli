@@ -11,8 +11,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - name: Check archives and execute the native installer
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            export SCULPT_TEST_BINARY="$GITHUB_WORKSPACE/target/debug/sculpt.exe"
+          else
+            export SCULPT_TEST_BINARY="$GITHUB_WORKSPACE/target/debug/sculpt"
+          fi
+          python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Install and test the generated Homebrew formula
+        if: runner.os == 'macOS'
+        run: python tests/homebrew_smoke.py target/debug/sculpt
