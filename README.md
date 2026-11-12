@@ -89,12 +89,15 @@ create a release whose tag is literally `upload`, use `sculpt release -- upload`
 
 ## Install
 
-```bash
-cargo install --git https://github.com/Sculptary/cli
-```
+Download prebuilt binaries and checksum-pinned installers from the
+[sculpt 0.5.0 release](https://github.com/Sculptary/cli/releases/tag/v0.5.0).
+Verify downloaded files against its `SHA256SUMS` manifest.
 
-Prebuilt binaries for macOS, Linux and Windows are attached to each
-[release](https://github.com/Sculptary/cli/releases).
+To build that release from source:
+
+```bash
+cargo install --git https://github.com/Sculptary/cli --tag v0.5.0 --locked
+```
 
 The release workflow also produces `sculpt.rb` for Homebrew, `sculpt.json` for
 Scoop, `install.sh`, `install.ps1` and `SHA256SUMS`. These accompany the four
